@@ -10,9 +10,9 @@ def calculate_angle_to_target(robot_pos, target_pos):
     angle_deg = math.degrees(angle_rad)
 
     # Normalize to [-90, 90]
-    if angle_deg > 90:
+    if angle_deg > 95:
         angle_deg = angle_deg - 180
-    elif angle_deg < -90:
+    elif angle_deg < -95:
         angle_deg = angle_deg + 180
 
     return angle_deg
@@ -21,19 +21,25 @@ def calculate_angle_to_target(robot_pos, target_pos):
 def get_obstacle_info(robot_pos, obstacles):
     min_distance = float('inf')
     min_angle = 0
+    detection_threshold = 0.4  # 40 cm detection threshold
 
     for obstacle in obstacles:
         dx = obstacle[0] - robot_pos[0]
         dy = obstacle[1] - robot_pos[1]
         distance = math.sqrt(dx * dx + dy * dy)
 
-        if distance < min_distance:
+        # Only consider obstacles within detection range (40 cm)
+        if distance <= detection_threshold and distance < min_distance:
             min_distance = distance
             min_angle = math.degrees(math.atan2(dy, dx))
-            if min_angle > 90:
+            if min_angle > 95:
                 min_angle = min_angle - 180
-            elif min_angle < -90:
+            elif min_angle < -95:
                 min_angle = min_angle + 180
+
+    # If no obstacles detected within range, return special values
+    if min_distance == float('inf'):
+        return 0, float('inf')  # Angle doesn't matter when no obstacle is detected
 
     return min_angle, min_distance
 

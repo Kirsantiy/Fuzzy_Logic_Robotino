@@ -33,7 +33,7 @@ class RobotSimulator:
 
         # Initialize obstacles
         self.obstacles = self._generate_obstacles()
-        self.obstacle_speeds = [random.uniform(0.002, 0.005) for _ in range(4)]
+        self.obstacle_speeds = [random.uniform(0.0002, 0.0005) for _ in range(4)]
         self.obstacle_directions = [1 if random.random() > 0.5 else -1 for _ in range(4)]
 
     def _generate_obstacles(self):
@@ -53,21 +53,45 @@ class RobotSimulator:
             self.obstacles[i][0] += self.obstacle_speeds[i] * self.obstacle_directions[i]
 
             # Reverse direction if hitting walls
-            if self.obstacles[i][0] <= 0.2 or self.obstacles[i][0] + self.obstacles[i][2] >= 1.8:
+            if self.obstacles[i][0] <= 0 or self.obstacles[i][0] + self.obstacles[i][2] >= 2:
                 self.obstacle_directions[i] *= -1
+
+    def check_circle_rect_collision(self, circle_center, circle_radius, rect):
+        """Check if a circle and a rectangle collide."""
+        # Closest point on the rectangle to the circle's center
+        closest_x = max(rect.left, min(circle_center[0], rect.right))
+        closest_y = max(rect.top, min(circle_center[1], rect.bottom))
+
+        # Calculate the distance from the circle's center to this closest point
+        distance_x = circle_center[0] - closest_x
+        distance_y = circle_center[1] - closest_y
+
+        # Use the Pythagorean theorem to check if the distance is less than the circle's radius
+        distance_squared = (distance_x ** 2) + (distance_y ** 2)
+        return distance_squared < (circle_radius ** 2)
+
 
     def _check_collision(self):
         """Check if robot has collided with any obstacle"""
-        robot_radius = 0.25  # Half of robot diameter (0.5)
+        robot_radius = 0.25 * self.scale  # Adjust robot's radius with scale
+        robot_center = (self.robot_pos[0] * self.scale, (2 - self.robot_pos[1]) * self.scale)
 
         for obs in self.obstacles:
             obs_x, obs_y, obs_width = obs
-            # Check if robot center is within obstacle bounds (with some margin)
-            if (abs(self.robot_pos[1] - obs_y) < (0.1 + robot_radius) and  # 0.1 is obstacle height
-                    self.robot_pos[0] + robot_radius > obs_x and
-                    self.robot_pos[0] - robot_radius < obs_x + obs_width):
+
+            # Create a rectangle for the obstacle with the scaled coordinates
+            obs_rect = pygame.Rect(
+                obs_x * self.scale,
+                (2 - obs_y) * self.scale - (0.05 * self.scale),
+                obs_width * self.scale,
+                0.1 * self.scale
+            )
+
+            # Check for collision between the circle (robot) and the rectangle (obstacle)
+            if self.check_circle_rect_collision(robot_center, robot_radius, obs_rect):
                 return True
         return False
+
 
     def _check_goal_reached(self):
         """Check if robot has reached the target"""
@@ -104,6 +128,25 @@ class RobotSimulator:
 
         pygame.display.flip()
 
+    def game_over(self):
+        """Display game over message and wait for the user to press 'R' to restart."""
+        game_over = True
+        while game_over:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_r:  # Нажмите 'R' для перезапуска
+                        game_over = False  # Выход из состояния game over
+
+            # Рисуем сообщение "Game Over"
+            self.screen.fill((255, 255, 255))
+            font = pygame.font.Font(None, 36)
+            text = font.render("CHARGE, ПОКИНУТЬ ТЕЛО:)", True, (255, 0, 0))
+            self.screen.blit(text, (self.width // 2 - text.get_width() // 2, self.height // 2 - text.get_height() // 2))
+            pygame.display.flip()
+
     def run(self):
         running = True
         clock = pygame.time.Clock()
@@ -128,34 +171,36 @@ class RobotSimulator:
                 self.obstacle_controller
             )
 
-            # Update robot position based on control commands
+            # preUpdate robot position based on control commands
             angle_rad = math.radians(direction)
-            self.robot_pos[0] += speed * math.cos(angle_rad) * 0.01
-            self.robot_pos[1] += speed * math.sin(angle_rad) * 0.01
+            if (angle_rad > 0):
+                self.robot_pos[0] += speed * math.cos(angle_rad) * 0.005
+            else:
+                self.robot_pos[0] += speed * math.cos(angle_rad) * -0.005
+            self.robot_pos[1] += speed * abs(math.sin(angle_rad) * 0.005)
+            print(self.robot_pos[1])
+
+            if self._check_collision():
+                print("Collision detected! Press 'R' to reset")
+                self.game_over()
+                self.reset_simulation()
 
             # Keep robot within bounds
             self.robot_pos[0] = max(0.25, min(1.75, self.robot_pos[0]))
             self.robot_pos[1] = max(0.25, min(1.75, self.robot_pos[1]))
-
-            # Check for collision or goal
-            if self._check_collision():
-                print("Collision detected! Press 'R' to reset")
-                continue
 
             if self._check_goal_reached():
                 print("Goal reached! Press 'R' to reset")
                 self.reset_simulation()
 
             self._draw()
-            clock.tick(60)
+            clock.tick(80)
 
         pygame.quit()
-
 
 def main():
     simulator = RobotSimulator()
     simulator.run()
-
 
 if __name__ == "__main__":
     main()
